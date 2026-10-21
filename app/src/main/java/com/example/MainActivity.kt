@@ -84,14 +84,26 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         // 2. Initialize AdMob early
-        (application as QuestRewardsApp).adManager.initMobileAds(this)
+        try {
+            (application as? QuestRewardsApp)?.adManager?.initMobileAds(this)
+        } catch (e: Throwable) {
+            android.util.Log.e("MainActivity", "Error initializing AdMob in MainActivity: ${e.message}", e)
+        }
 
         // 3. Read deep link from intent if started via notification
-        val initialRoute = intent?.getStringExtra(NotificationHelper.EXTRA_ROUTE)
-            ?: intent?.extras?.getString("route")
+        val initialRoute = try {
+            intent?.getStringExtra(NotificationHelper.EXTRA_ROUTE)
+                ?: intent?.extras?.getString("route")
+        } catch (e: Throwable) {
+            null
+        }
 
         // 4. Synchronous check of currentUser: straight into Home (or Login for new users)
-        val initialUserLoggedIn = FirebaseAuth.getInstance().currentUser != null
+        val initialUserLoggedIn = try {
+            FirebaseAuth.getInstance().currentUser != null
+        } catch (e: Throwable) {
+            false
+        }
 
         setContent {
             QuestRewardsTheme {

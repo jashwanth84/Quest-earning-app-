@@ -50,9 +50,13 @@ class AdManager(private val context: Context) {
 
     fun initMobileAds(activity: Activity) {
         if (!isAdMobInitialized) {
-            MobileAds.initialize(context) { status ->
-                isAdMobInitialized = true
-                Log.d(tag, "AdMob initialized: $status")
+            try {
+                MobileAds.initialize(context) { status ->
+                    isAdMobInitialized = true
+                    Log.d(tag, "AdMob initialized: $status")
+                }
+            } catch (e: Throwable) {
+                Log.e(tag, "AdMob initialization error: ${e.message}", e)
             }
         }
     }
@@ -61,21 +65,25 @@ class AdManager(private val context: Context) {
         _adConfig.value = config
         // Initialize Unity Ads when config arrives or updates
         if (config.adsEnabled && config.unityGameId.isNotBlank() && !isUnityInitialized) {
-            UnityAds.initialize(
-                context,
-                config.unityGameId,
-                config.unityTestMode,
-                object : IUnityAdsInitializationListener {
-                    override fun onInitializationComplete() {
-                        isUnityInitialized = true
-                        Log.d(tag, "Unity Ads initialized successfully")
-                    }
+            try {
+                UnityAds.initialize(
+                    context,
+                    config.unityGameId,
+                    config.unityTestMode,
+                    object : IUnityAdsInitializationListener {
+                        override fun onInitializationComplete() {
+                            isUnityInitialized = true
+                            Log.d(tag, "Unity Ads initialized successfully")
+                        }
 
-                    override fun onInitializationFailed(error: UnityAds.UnityAdsInitializationError?, message: String?) {
-                        Log.w(tag, "Unity Ads init failed: $error - $message")
+                        override fun onInitializationFailed(error: UnityAds.UnityAdsInitializationError?, message: String?) {
+                            Log.w(tag, "Unity Ads init failed: $error - $message")
+                        }
                     }
-                }
-            )
+                )
+            } catch (e: Throwable) {
+                Log.e(tag, "Unity Ads initialization error: ${e.message}", e)
+            }
         }
     }
 

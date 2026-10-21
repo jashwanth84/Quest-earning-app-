@@ -30,9 +30,18 @@ class AuthService(
     private val auth = FirebaseAuth.getInstance()
     private val credentialManager = CredentialManager.create(context)
 
-    // Web client ID resolved dynamically from google-services.json
+    // Web client ID resolved dynamically with fallback
     val webClientId: String
-        get() = context.getString(R.string.default_web_client_id)
+        get() = try {
+            val id = context.getString(R.string.default_web_client_id)
+            if (id.isNotBlank() && id != "REPLACE_WITH_WEB_CLIENT_ID") {
+                id
+            } else {
+                "206042227392-neai3il3b8g7bjvel6hug1hvhjgmprud.apps.googleusercontent.com"
+            }
+        } catch (e: Throwable) {
+            "206042227392-neai3il3b8g7bjvel6hug1hvhjgmprud.apps.googleusercontent.com"
+        }
 
     val currentUser: FirebaseUser?
         get() = auth.currentUser
