@@ -1,0 +1,6 @@
+{
+  "name": "Quest Rewards",
+  "description": "Play games, complete tasks, watch videos, and earn rewards and cash payouts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
