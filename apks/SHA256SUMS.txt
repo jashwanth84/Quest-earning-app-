@@ -1,2 +1,2 @@
-570cd58422dd8215e4ed40120b93757591f9508264febc1cda1e7c12f16a407c  QuestRewards-v1.0-debug.apk
-c80ab4eb54e3bc73bd302ba070b0997ba598c58c7a0bda736876ba021b17958f  QuestRewards-v1.0-release.apk
+8929c5bb8a46b363264e0b596fdeb66f0b9e885bd56df8c00c29be653bee3e04  QuestRewards-v1.0-debug.apk
+46aea1fece343808e567d981437df46864a3c577f00ac2bf19309f21463a4cd6  QuestRewards-v1.0-release.apk

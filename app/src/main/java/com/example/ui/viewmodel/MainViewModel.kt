@@ -301,7 +301,11 @@ class MainViewModel(
                 }
                 .onFailure { error ->
                     _isAuthLoading.value = false
-                    _authError.value = error.localizedMessage ?: "Failed to sign in with Google"
+                    if (error is androidx.credentials.exceptions.GetCredentialCancellationException) {
+                        _authError.value = null
+                    } else {
+                        _authError.value = error.localizedMessage ?: "Failed to sign in with Google"
+                    }
                 }
         }
     }
