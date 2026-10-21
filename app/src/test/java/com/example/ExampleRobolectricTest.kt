@@ -1,16 +1,17 @@
 package com.example
 
-import android.app.Application
 import android.content.Context
+import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(sdk = [34], application = QuestRewardsApp::class)
 class ExampleRobolectricTest {
 
   @Test
@@ -18,5 +19,21 @@ class ExampleRobolectricTest {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val appName = context.getString(R.string.app_name)
     assertEquals("Quest Rewards", appName)
+  }
+
+  @Test
+  fun `app and activity initialization test`() {
+    val app = QuestRewardsApp.instance
+    assertNotNull(app)
+    assertNotNull(app.appDatabase)
+    assertNotNull(app.firestoreRepository)
+    assertNotNull(app.adManager)
+    assertNotNull(app.authService)
+
+    ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+      scenario.onActivity { activity ->
+        assertNotNull(activity)
+      }
+    }
   }
 }
