@@ -1,0 +1,52 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account profile with reward balances",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "coins": { "type": "integer" },
+        "gems": { "type": "integer" },
+        "dailyCoins": { "type": "integer" },
+        "weeklyCoins": { "type": "integer" },
+        "lastDailyDate": { "type": "string" },
+        "lastWeeklyDate": { "type": "string" },
+        "videosWatchedToday": { "type": "integer" },
+        "lastVideoDate": { "type": "string" },
+        "lastVideoAt": { "type": "integer" },
+        "notificationsEnabled": { "type": "boolean" },
+        "platform": { "type": "string" },
+        "isBlocked": { "type": "boolean" },
+        "referralCode": { "type": "string" },
+        "referredBy": { "type": "string" },
+        "referralCount": { "type": "integer" },
+        "referralCoinsEarned": { "type": "integer" },
+        "referralGemsEarned": { "type": "integer" },
+        "updatedAt": { "type": "integer" }
+      },
+      "required": ["uid", "coins", "gems"]
+    },
+    "TaskItem": {
+      "title": "TaskItem",
+      "description": "Available rewards tasks",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "rewardCoins": { "type": "integer" },
+        "rewardGems": { "type": "integer" },
+        "category": { "type": "string" },
+        "actionUrl": { "type": "string" },
+        "iconType": { "type": "string" },
+        "order": { "type": "integer" },
+        "isEnabled": { "type": "boolean" }
+      },
+      "required": ["title", "rewardCoins", "category"]
+    }
+  }
+}

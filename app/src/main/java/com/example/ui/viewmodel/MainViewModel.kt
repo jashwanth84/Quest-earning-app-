@@ -111,94 +111,47 @@ class MainViewModel(
     private val _referrals = MutableStateFlow<List<ReferralRecord>>(emptyList())
     val referrals: StateFlow<List<ReferralRecord>> = _referrals.asStateFlow()
 
+    private var appConfigJob: Job? = null
+    private var adConfigJob: Job? = null
+    private var adUnitsJob: Job? = null
+    private var tasksJob: Job? = null
+    private var taskCategoriesJob: Job? = null
+    private var payoutMethodsJob: Job? = null
+    private var leaderboardDailyJob: Job? = null
+    private var leaderboardWeeklyJob: Job? = null
+    private var leaderboardAllTimeJob: Job? = null
     private var profileJob: Job? = null
     private var withdrawalsJob: Job? = null
     private var notificationsJob: Job? = null
     private var referralsJob: Job? = null
 
     init {
-        // Observe configurations and public items
-        listenAppConfig()
-        listenAdConfig()
-        listenAdUnits()
-        listenTasks()
-        listenTaskCategories()
-        listenPayoutMethods()
-        listenLeaderboards()
+        // Observe local cached data
         listenLocalTaskHistory()
         listenLocalReadNotifications()
 
-        // If user already logged in at startup
+        // If user already logged in at startup, start all Firestore listeners
         val currentUid = authService.currentUser?.uid
         if (!currentUid.isNullOrEmpty()) {
             _currentUserId.value = currentUid
-            listenUserData(currentUid)
+            viewModelScope.launch {
+                val local = localDb.userBalanceDao().getBalanceOnce(currentUid)
+                if (local != null && _userProfile.value == null) {
+                    _userProfile.value = UserProfile(
+                        uid = local.uid,
+                        coins = local.coins,
+                        gems = local.gems,
+                        displayName = local.displayName.ifBlank { "Quest Gamer" },
+                        email = local.email,
+                        photoUrl = local.photoUrl
+                    )
+                }
+            }
+            startAllFirestoreListeners(currentUid)
         }
 
         // Start video cooldown ticker
         startCooldownTicker()
-    }
-
-    private fun listenAppConfig() {
-        viewModelScope.launch {
-            firestoreRepository.getAppConfig().collect { config ->
-                _appConfig.value = config
-            }
-        }
-    }
-
-    private fun listenAdConfig() {
-        viewModelScope.launch {
-            firestoreRepository.getAdConfig().collect { config ->
-                _adConfig.value = config
-                adManager.updateConfig(config)
-            }
-        }
-    }
-
-    private fun listenAdUnits() {
-        viewModelScope.launch {
-            firestoreRepository.getAdUnits().collect { units ->
-                _adUnits.value = units
-                adManager.updateAdUnits(units)
-            }
-        }
-    }
-
-    private fun listenTasks() {
-        viewModelScope.launch {
-            firestoreRepository.getTasks().collect { taskList ->
-                _tasks.value = taskList
-            }
-        }
-    }
-
-    private fun listenTaskCategories() {
-        viewModelScope.launch {
-            firestoreRepository.getTaskCategories().collect { catList ->
-                _taskCategories.value = catList
-            }
-        }
-    }
-
-    private fun listenPayoutMethods() {
-        viewModelScope.launch {
-            firestoreRepository.getPayoutMethods().collect { methodList ->
-                _payoutMethods.value = methodList
-            }
-        }
-    }
-
-    private fun listenLeaderboards() {
-        viewModelScope.launch {
-            firestoreRepository.getLeaderboard("DAILY").collect { _leaderboardDaily.value = it }
-        }
-        viewModelScope.launch {
-            firestoreRepository.getLeaderboard("WEEKLY").collect { _leaderboardWeekly.value = it }
-        }
-        viewModelScope.launch {
-            firestoreRepository.getLeaderboard("ALL_TIME").collect { _leaderboardAllTime.value = it }
-        }
     }
 
     private fun listenLocalTaskHistory() {
@@ -211,20 +164,70 @@ class MainViewModel(
 
     private fun listenLocalReadNotifications() {
         viewModelScope.launch {
-            localDb.notificationReadDao().getReadNotificationIds().collect { ids ->
-                _readNotificationIds.value = ids.toSet()
+            localDb.notificationReadDao().getReadNotificationIds().collect { list ->
+                _readNotificationIds.value = list.toSet()
             }
         }
     }
 
-    fun listenUserData(uid: String) {
-        profileJob?.cancel()
-        withdrawalsJob?.cancel()
-        notificationsJob?.cancel()
+    fun startAllFirestoreListeners(uid: String) {
+        stopAllFirestoreListeners()
+
+        appConfigJob = viewModelScope.launch {
+            firestoreRepository.getAppConfig().collect { config ->
+                _appConfig.value = config
+            }
+        }
+
+        adConfigJob = viewModelScope.launch {
+            firestoreRepository.getAdConfig().collect { config ->
+                _adConfig.value = config
+                adManager.updateConfig(config)
+            }
+        }
+
+        adUnitsJob = viewModelScope.launch {
+            firestoreRepository.getAdUnits().collect { units ->
+                _adUnits.value = units
+                adManager.updateAdUnits(units)
+            }
+        }
+
+        tasksJob = viewModelScope.launch {
+            firestoreRepository.getTasks().collect { taskList ->
+                _tasks.value = taskList
+            }
+        }
+
+        taskCategoriesJob = viewModelScope.launch {
+            firestoreRepository.getTaskCategories().collect { catList ->
+                _taskCategories.value = catList
+            }
+        }
+
+        payoutMethodsJob = viewModelScope.launch {
+            firestoreRepository.getPayoutMethods().collect { methodList ->
+                _payoutMethods.value = methodList
+            }
+        }
+
+        leaderboardDailyJob = viewModelScope.launch {
+            firestoreRepository.getLeaderboard("DAILY").collect { _leaderboardDaily.value = it }
+        }
+
+        leaderboardWeeklyJob = viewModelScope.launch {
+            firestoreRepository.getLeaderboard("WEEKLY").collect { _leaderboardWeekly.value = it }
+        }
+
+        leaderboardAllTimeJob = viewModelScope.launch {
+            firestoreRepository.getLeaderboard("ALL_TIME").collect { _leaderboardAllTime.value = it }
+        }
 
         profileJob = viewModelScope.launch {
             firestoreRepository.getUserProfile(uid).collect { profile ->
-                _userProfile.value = profile
+                if (profile != null) {
+                    _userProfile.value = profile
+                }
             }
         }
 
@@ -240,12 +243,27 @@ class MainViewModel(
             }
         }
 
-        referralsJob?.cancel()
         referralsJob = viewModelScope.launch {
             firestoreRepository.getReferralsForUser(uid).collect { list ->
                 _referrals.value = list
             }
         }
+    }
+
+    fun stopAllFirestoreListeners() {
+        appConfigJob?.cancel()
+        adConfigJob?.cancel()
+        adUnitsJob?.cancel()
+        tasksJob?.cancel()
+        taskCategoriesJob?.cancel()
+        payoutMethodsJob?.cancel()
+        leaderboardDailyJob?.cancel()
+        leaderboardWeeklyJob?.cancel()
+        leaderboardAllTimeJob?.cancel()
+        profileJob?.cancel()
+        withdrawalsJob?.cancel()
+        notificationsJob?.cancel()
+        referralsJob?.cancel()
     }
 
     private fun startCooldownTicker() {
@@ -277,7 +295,7 @@ class MainViewModel(
             authService.signInWithGoogle(activityContext)
                 .onSuccess { user ->
                     _currentUserId.value = user.uid
-                    listenUserData(user.uid)
+                    startAllFirestoreListeners(user.uid)
                     _isAuthLoading.value = false
                     onSuccess()
                 }
@@ -296,10 +314,7 @@ class MainViewModel(
     fun signOut(onComplete: () -> Unit) {
         viewModelScope.launch {
             authService.signOut()
-            profileJob?.cancel()
-            withdrawalsJob?.cancel()
-            notificationsJob?.cancel()
-            referralsJob?.cancel()
+            stopAllFirestoreListeners()
             _userProfile.value = null
             _referrals.value = emptyList()
             _currentUserId.value = ""

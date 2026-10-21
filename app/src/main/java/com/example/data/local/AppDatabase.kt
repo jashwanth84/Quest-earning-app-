@@ -41,6 +41,9 @@ interface UserBalanceDao {
     @Query("SELECT * FROM user_balance WHERE uid = :uid LIMIT 1")
     fun getBalance(uid: String): Flow<UserBalanceEntity?>
 
+    @Query("SELECT * FROM user_balance WHERE uid = :uid LIMIT 1")
+    suspend fun getBalanceOnce(uid: String): UserBalanceEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveBalance(balance: UserBalanceEntity)
 

@@ -24,6 +24,7 @@ import com.google.firebase.storage.StorageMetadata
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -35,6 +36,158 @@ class FirestoreRepository(
     private val localDb: AppDatabase
 ) {
     private val tag = "FirestoreRepository"
+
+    val defaultTasks = listOf(
+        TaskItem(
+            id = "task_daily_checkin",
+            title = "Daily Check-in Quest",
+            description = "Open the app daily to collect your daily reward bonus",
+            rewardCoins = 25L,
+            category = "Daily Quests",
+            iconType = "star",
+            actionUrl = "claim://daily_checkin",
+            order = 1,
+            isEnabled = true
+        ),
+        TaskItem(
+            id = "task_watch_video",
+            title = "Watch Gaming Video",
+            description = "Watch a high-paying sponsored gaming trailer",
+            rewardCoins = 15L,
+            category = "Video Rewards",
+            iconType = "video",
+            actionUrl = "action://watch_earn",
+            order = 2,
+            isEnabled = true
+        ),
+        TaskItem(
+            id = "task_image_finder",
+            title = "Play Image Finder",
+            description = "Spot the target items in 30 seconds to earn bonus gems",
+            rewardCoins = 50L,
+            category = "Gaming",
+            iconType = "game",
+            actionUrl = "action://image_finder",
+            order = 3,
+            isEnabled = true
+        ),
+        TaskItem(
+            id = "task_survey",
+            title = "Quick Gaming Survey",
+            description = "Complete a short 2-minute gaming feedback survey",
+            rewardCoins = 100L,
+            category = "Surveys",
+            iconType = "survey",
+            actionUrl = "https://play.google.com/store",
+            order = 4,
+            isEnabled = true
+        ),
+        TaskItem(
+            id = "task_refer_friend",
+            title = "Invite Friends & Earn",
+            description = "Share your referral code and get 100 coins + 10 gems each",
+            rewardCoins = 100L,
+            category = "Daily Quests",
+            iconType = "share",
+            actionUrl = "action://refer_earn",
+            order = 5,
+            isEnabled = true
+        )
+    )
+
+    val defaultCategories = listOf(
+        TaskCategory("cat_all", "ALL", "category", 1, true),
+        TaskCategory("cat_gaming", "Gaming", "category", 2, true),
+        TaskCategory("cat_surveys", "Surveys", "category", 3, true),
+        TaskCategory("cat_daily", "Daily Quests", "category", 4, true),
+        TaskCategory("cat_video", "Video Rewards", "category", 5, true)
+    )
+
+    val defaultPayoutMethods = listOf(
+        PayoutMethod(
+            id = "pm_paypal",
+            title = "PayPal Cash",
+            subtitle = "Instant cash transfer to your PayPal wallet",
+            iconType = "wallet",
+            minCoins = 1000L,
+            cashAmount = 1.0,
+            currency = "USD",
+            inputLabel = "PayPal Email Address",
+            inputPlaceholder = "you@example.com",
+            order = 1,
+            isEnabled = true
+        ),
+        PayoutMethod(
+            id = "pm_google_play",
+            title = "Google Play Gift Code",
+            subtitle = "Play Store redemption gift code delivered via email",
+            iconType = "wallet",
+            minCoins = 1000L,
+            cashAmount = 1.0,
+            currency = "USD",
+            inputLabel = "Delivery Email Address",
+            inputPlaceholder = "you@example.com",
+            order = 2,
+            isEnabled = true
+        ),
+        PayoutMethod(
+            id = "pm_amazon",
+            title = "Amazon Gift Voucher",
+            subtitle = "Amazon shopping gift card voucher code",
+            iconType = "wallet",
+            minCoins = 2000L,
+            cashAmount = 2.0,
+            currency = "USD",
+            inputLabel = "Email Address for Voucher",
+            inputPlaceholder = "you@example.com",
+            order = 3,
+            isEnabled = true
+        ),
+        PayoutMethod(
+            id = "pm_crypto",
+            title = "Crypto USDT",
+            subtitle = "USDT TRC20 / BEP20 cryptocurrency payout",
+            iconType = "wallet",
+            minCoins = 5000L,
+            cashAmount = 5.0,
+            currency = "USD",
+            inputLabel = "USDT Wallet Address",
+            inputPlaceholder = "T...",
+            order = 4,
+            isEnabled = true
+        )
+    )
+
+    val defaultLeaderboard = listOf(
+        UserProfile(uid = "seed1", displayName = "ShadowNinja", coins = 12450L, dailyCoins = 1450L, weeklyCoins = 4850L),
+        UserProfile(uid = "seed2", displayName = "AlexRider", coins = 9820L, dailyCoins = 1120L, weeklyCoins = 3900L),
+        UserProfile(uid = "seed3", displayName = "CrystalQueen", coins = 8740L, dailyCoins = 950L, weeklyCoins = 3400L),
+        UserProfile(uid = "seed4", displayName = "PixelMaster", coins = 7610L, dailyCoins = 820L, weeklyCoins = 2950L),
+        UserProfile(uid = "seed5", displayName = "DragonSlayer", coins = 6490L, dailyCoins = 710L, weeklyCoins = 2400L)
+    )
+
+    val defaultAdUnits = listOf(
+        AdUnitItem(
+            id = "au_banner",
+            title = "Bottom Banner",
+            provider = "ADMOB",
+            adType = "BANNER",
+            unitId = "ca-app-pub-3940256099942544/6300978111",
+            placement = "home_bottom_banner",
+            order = 1,
+            isEnabled = true
+        ),
+        AdUnitItem(
+            id = "au_rewarded",
+            title = "Watch & Earn Video",
+            provider = "ADMOB",
+            adType = "REWARDED",
+            unitId = "ca-app-pub-3940256099942544/5224354917",
+            placement = "watch_earn_rewarded",
+            order = 2,
+            isEnabled = true
+        )
+    )
 
     private fun getTodayDateString(): String {
         return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
@@ -55,17 +208,51 @@ class FirestoreRepository(
             return@callbackFlow
         }
 
+        // Emit cached profile if present
+        launch {
+            try {
+                val local = localDb.userBalanceDao().getBalanceOnce(uid)
+                if (local != null) {
+                    trySend(
+                        UserProfile(
+                            uid = local.uid,
+                            coins = local.coins,
+                            gems = local.gems,
+                            displayName = local.displayName.ifBlank { "Quest Gamer" },
+                            email = local.email,
+                            photoUrl = local.photoUrl
+                        )
+                    )
+                }
+            } catch (_: Exception) {}
+        }
+
         val listener = firestore.collection("users").document(uid)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(tag, "Error listening to user profile: ${error.message}")
+                    Log.w(tag, "Could not listen to user profile: ${error.message}")
                     return@addSnapshotListener
                 }
                 if (snapshot != null && snapshot.exists()) {
                     val profile = snapshot.toObject(UserProfile::class.java)
-                    trySend(profile)
-                } else {
-                    trySend(null)
+                    if (profile != null) {
+                        trySend(profile)
+                        launch {
+                            try {
+                                localDb.userBalanceDao().saveBalance(
+                                    UserBalanceEntity(
+                                        uid = profile.uid,
+                                        coins = profile.coins,
+                                        gems = profile.gems,
+                                        displayName = profile.displayName,
+                                        email = profile.email,
+                                        photoUrl = profile.photoUrl,
+                                        updatedAt = profile.updatedAt
+                                    )
+                                )
+                            } catch (_: Exception) {}
+                        }
+                    }
                 }
             }
         awaitClose { listener.remove() }
@@ -73,10 +260,11 @@ class FirestoreRepository(
 
     // App Config listener
     fun getAppConfig(): Flow<AppConfig> = callbackFlow {
+        trySend(AppConfig())
         val listener = firestore.collection("app_config").document("settings")
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(tag, "Error listening to app_config: ${error.message}")
+                    Log.w(tag, "Could not fetch app_config: ${error.message}")
                     trySend(AppConfig())
                     return@addSnapshotListener
                 }
@@ -92,10 +280,11 @@ class FirestoreRepository(
 
     // Ad Config listener
     fun getAdConfig(): Flow<AdConfig> = callbackFlow {
+        trySend(AdConfig())
         val listener = firestore.collection("ad_config").document("settings")
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(tag, "Error listening to ad_config: ${error.message}")
+                    Log.w(tag, "Could not fetch ad_config: ${error.message}")
                     trySend(AdConfig())
                     return@addSnapshotListener
                 }
@@ -111,72 +300,92 @@ class FirestoreRepository(
 
     // Ad Units listener
     fun getAdUnits(): Flow<List<AdUnitItem>> = callbackFlow {
+        trySend(defaultAdUnits)
         val listener = firestore.collection("ad_units")
             .whereEqualTo("isEnabled", true)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(tag, "Error listening to ad_units: ${error.message}")
-                    trySend(emptyList())
+                    Log.w(tag, "Could not fetch ad_units: ${error.message}")
+                    trySend(defaultAdUnits)
                     return@addSnapshotListener
                 }
                 val units = snapshot?.documents?.mapNotNull { doc ->
                     doc.toObject(AdUnitItem::class.java)?.copy(id = doc.id)
                 }?.sortedBy { it.order } ?: emptyList()
-                trySend(units)
+                if (units.isEmpty()) {
+                    trySend(defaultAdUnits)
+                } else {
+                    trySend(units)
+                }
             }
         awaitClose { listener.remove() }
     }
 
     // Tasks listener
     fun getTasks(): Flow<List<TaskItem>> = callbackFlow {
+        trySend(defaultTasks)
         val listener = firestore.collection("tasks")
             .whereEqualTo("isEnabled", true)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(tag, "Error listening to tasks: ${error.message}")
-                    trySend(emptyList())
+                    Log.w(tag, "Could not fetch tasks: ${error.message}")
+                    trySend(defaultTasks)
                     return@addSnapshotListener
                 }
                 val tasks = snapshot?.documents?.mapNotNull { doc ->
                     doc.toObject(TaskItem::class.java)?.copy(id = doc.id)
                 }?.sortedBy { it.order } ?: emptyList()
-                trySend(tasks)
+                if (tasks.isEmpty()) {
+                    trySend(defaultTasks)
+                } else {
+                    trySend(tasks)
+                }
             }
         awaitClose { listener.remove() }
     }
 
     // Task categories listener
     fun getTaskCategories(): Flow<List<TaskCategory>> = callbackFlow {
+        trySend(defaultCategories)
         val listener = firestore.collection("task_categories")
             .whereEqualTo("isEnabled", true)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(tag, "Error listening to task_categories: ${error.message}")
-                    trySend(emptyList())
+                    Log.w(tag, "Could not fetch task_categories: ${error.message}")
+                    trySend(defaultCategories)
                     return@addSnapshotListener
                 }
                 val categories = snapshot?.documents?.mapNotNull { doc ->
                     doc.toObject(TaskCategory::class.java)?.copy(id = doc.id)
                 }?.sortedBy { it.order } ?: emptyList()
-                trySend(categories)
+                if (categories.isEmpty()) {
+                    trySend(defaultCategories)
+                } else {
+                    trySend(categories)
+                }
             }
         awaitClose { listener.remove() }
     }
 
     // Payout methods listener
     fun getPayoutMethods(): Flow<List<PayoutMethod>> = callbackFlow {
+        trySend(defaultPayoutMethods)
         val listener = firestore.collection("payout_methods")
             .whereEqualTo("isEnabled", true)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(tag, "Error listening to payout_methods: ${error.message}")
-                    trySend(emptyList())
+                    Log.w(tag, "Could not fetch payout_methods: ${error.message}")
+                    trySend(defaultPayoutMethods)
                     return@addSnapshotListener
                 }
                 val methods = snapshot?.documents?.mapNotNull { doc ->
                     doc.toObject(PayoutMethod::class.java)?.copy(id = doc.id)
                 }?.sortedBy { it.order } ?: emptyList()
-                trySend(methods)
+                if (methods.isEmpty()) {
+                    trySend(defaultPayoutMethods)
+                } else {
+                    trySend(methods)
+                }
             }
         awaitClose { listener.remove() }
     }
@@ -193,7 +402,7 @@ class FirestoreRepository(
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(tag, "Error listening to withdrawals: ${error.message}")
+                    Log.w(tag, "Could not fetch withdrawals: ${error.message}")
                     trySend(emptyList())
                     return@addSnapshotListener
                 }
@@ -212,7 +421,7 @@ class FirestoreRepository(
             .limit(50)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(tag, "Error listening to notifications: ${error.message}")
+                    Log.w(tag, "Could not fetch notifications: ${error.message}")
                     trySend(emptyList())
                     return@addSnapshotListener
                 }
@@ -227,142 +436,198 @@ class FirestoreRepository(
 
     // Leaderboards
     fun getLeaderboard(type: String): Flow<List<UserProfile>> = callbackFlow {
+        trySend(defaultLeaderboard)
         val sortField = when (type) {
             "DAILY" -> "dailyCoins"
             "WEEKLY" -> "weeklyCoins"
             else -> "coins"
         }
         val listener = firestore.collection("users")
-            .whereEqualTo("isBlocked", false)
             .orderBy(sortField, Query.Direction.DESCENDING)
             .limit(50)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(tag, "Error fetching leaderboard: ${error.message}")
-                    trySend(emptyList())
+                    Log.w(tag, "Could not fetch leaderboard: ${error.message}")
+                    trySend(defaultLeaderboard)
                     return@addSnapshotListener
                 }
                 val users = snapshot?.documents?.mapNotNull { doc ->
                     val user = doc.toObject(UserProfile::class.java)
-                    if (user != null && user.displayName.isNotBlank()) user else null
+                    if (user != null && !user.isBlocked && user.displayName.isNotBlank()) user else null
                 } ?: emptyList()
-                trySend(users)
+                if (users.isEmpty()) {
+                    trySend(defaultLeaderboard)
+                } else {
+                    trySend(users)
+                }
             }
         awaitClose { listener.remove() }
     }
 
     // Initialize or sync user on login
     suspend fun initOrSyncUser(uid: String, displayName: String, email: String, photoUrl: String): UserProfile {
-        val userDocRef = firestore.collection("users").document(uid)
-        val snapshot = userDocRef.get().await()
-
         val today = getTodayDateString()
         val thisWeek = getCurrentWeekString()
 
-        if (!snapshot.exists()) {
-            // Fetch welcome bonus
-            val configDoc = firestore.collection("app_config").document("settings").get().await()
-            val welcomeCoins = configDoc.getLong("welcomeBonusCoins") ?: 50L
-            val welcomeGems = configDoc.getLong("welcomeBonusGems") ?: 5L
-            val refCode = generateUniqueReferralCode(uid)
+        try {
+            val userDocRef = firestore.collection("users").document(uid)
+            val snapshot = userDocRef.get().await()
 
-            val newUser = UserProfile(
-                uid = uid,
-                displayName = displayName.ifBlank { "Player" },
-                email = email,
-                photoUrl = photoUrl,
-                coins = welcomeCoins,
-                gems = welcomeGems,
-                dailyCoins = welcomeCoins,
-                weeklyCoins = welcomeCoins,
-                lastDailyDate = today,
-                lastWeeklyDate = thisWeek,
-                videosWatchedToday = 0,
-                lastVideoDate = today,
-                lastVideoAt = 0L,
-                notificationsEnabled = true,
-                platform = "Android",
-                isBlocked = false,
-                referralCode = refCode,
-                referredBy = "",
-                referralCount = 0,
-                referralCoinsEarned = 0L,
-                referralGemsEarned = 0L,
-                updatedAt = System.currentTimeMillis()
-            )
-            userDocRef.set(newUser).await()
-            try {
-                firestore.collection("referral_codes").document(refCode).set(
-                    mapOf("uid" to uid, "createdAt" to System.currentTimeMillis())
-                ).await()
-            } catch (e: Exception) {
-                Log.w(tag, "Could not index referral code: ${e.message}")
-            }
+            if (!snapshot.exists()) {
+                val configDoc = try {
+                    firestore.collection("app_config").document("settings").get().await()
+                } catch (_: Exception) {
+                    null
+                }
+                val welcomeCoins = configDoc?.getLong("welcomeBonusCoins") ?: 50L
+                val welcomeGems = configDoc?.getLong("welcomeBonusGems") ?: 5L
+                val refCode = generateUniqueReferralCode(uid)
 
-            // Sync with Room
-            localDb.userBalanceDao().saveBalance(
-                UserBalanceEntity(
+                val newUser = UserProfile(
                     uid = uid,
-                    coins = welcomeCoins,
-                    gems = welcomeGems,
-                    displayName = newUser.displayName,
+                    displayName = displayName.ifBlank { "Quest Gamer" },
                     email = email,
                     photoUrl = photoUrl,
+                    coins = welcomeCoins,
+                    gems = welcomeGems,
+                    dailyCoins = welcomeCoins,
+                    weeklyCoins = welcomeCoins,
+                    lastDailyDate = today,
+                    lastWeeklyDate = thisWeek,
+                    videosWatchedToday = 0,
+                    lastVideoDate = today,
+                    lastVideoAt = 0L,
+                    notificationsEnabled = true,
+                    platform = "Android",
+                    isBlocked = false,
+                    referralCode = refCode,
+                    referredBy = "",
+                    referralCount = 0,
+                    referralCoinsEarned = 0L,
+                    referralGemsEarned = 0L,
                     updatedAt = System.currentTimeMillis()
                 )
-            )
-            return newUser
-        } else {
-            val existing = snapshot.toObject(UserProfile::class.java)!!
-            var updated = existing.copy(
-                displayName = if (existing.displayName.isBlank()) displayName else existing.displayName,
-                email = if (existing.email.isBlank()) email else existing.email,
-                photoUrl = if (existing.photoUrl.isBlank()) photoUrl else existing.photoUrl
-            )
-
-            if (updated.referralCode.isBlank()) {
-                val newCode = generateUniqueReferralCode(uid)
-                updated = updated.copy(referralCode = newCode)
                 try {
-                    firestore.collection("referral_codes").document(newCode).set(
+                    userDocRef.set(newUser).await()
+                    firestore.collection("referral_codes").document(refCode).set(
                         mapOf("uid" to uid, "createdAt" to System.currentTimeMillis())
                     ).await()
-                    userDocRef.set(mapOf("referralCode" to newCode), SetOptions.merge()).await()
                 } catch (e: Exception) {
-                    Log.w(tag, "Could not set referral code: ${e.message}")
+                    Log.w(tag, "Could not set referral code remotely: ${e.message}")
                 }
-            }
 
-            // Reset daily/weekly if dates changed
-            val needsDailyReset = updated.lastDailyDate != today
-            val needsWeeklyReset = updated.lastWeeklyDate != thisWeek
-            val needsVideoReset = updated.lastVideoDate != today
-
-            if (needsDailyReset || needsWeeklyReset || needsVideoReset) {
-                updated = updated.copy(
-                    dailyCoins = if (needsDailyReset) 0L else updated.dailyCoins,
-                    lastDailyDate = today,
-                    weeklyCoins = if (needsWeeklyReset) 0L else updated.weeklyCoins,
-                    lastWeeklyDate = thisWeek,
-                    videosWatchedToday = if (needsVideoReset) 0 else updated.videosWatchedToday,
-                    lastVideoDate = today,
-                    updatedAt = System.currentTimeMillis()
+                // Sync with Room
+                localDb.userBalanceDao().saveBalance(
+                    UserBalanceEntity(
+                        uid = uid,
+                        coins = welcomeCoins,
+                        gems = welcomeGems,
+                        displayName = newUser.displayName,
+                        email = email,
+                        photoUrl = photoUrl,
+                        updatedAt = System.currentTimeMillis()
+                    )
                 )
-                userDocRef.set(updated, SetOptions.merge()).await()
-            }
+                return newUser
+            } else {
+                val existing = snapshot.toObject(UserProfile::class.java)!!
+                var updated = existing.copy(
+                    displayName = if (existing.displayName.isBlank()) displayName else existing.displayName,
+                    email = if (existing.email.isBlank()) email else existing.email,
+                    photoUrl = if (existing.photoUrl.isBlank()) photoUrl else existing.photoUrl
+                )
 
+                if (updated.referralCode.isBlank()) {
+                    val newCode = generateUniqueReferralCode(uid)
+                    updated = updated.copy(referralCode = newCode)
+                    try {
+                        firestore.collection("referral_codes").document(newCode).set(
+                            mapOf("uid" to uid, "createdAt" to System.currentTimeMillis())
+                        ).await()
+                        userDocRef.set(mapOf("referralCode" to newCode), SetOptions.merge()).await()
+                    } catch (e: Exception) {
+                        Log.w(tag, "Could not set referral code: ${e.message}")
+                    }
+                }
+
+                // Reset daily/weekly if dates changed
+                val needsDailyReset = updated.lastDailyDate != today
+                val needsWeeklyReset = updated.lastWeeklyDate != thisWeek
+                val needsVideoReset = updated.lastVideoDate != today
+
+                if (needsDailyReset || needsWeeklyReset || needsVideoReset) {
+                    updated = updated.copy(
+                        dailyCoins = if (needsDailyReset) 0L else updated.dailyCoins,
+                        lastDailyDate = today,
+                        weeklyCoins = if (needsWeeklyReset) 0L else updated.weeklyCoins,
+                        lastWeeklyDate = thisWeek,
+                        videosWatchedToday = if (needsVideoReset) 0 else updated.videosWatchedToday,
+                        lastVideoDate = today,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                    try {
+                        userDocRef.set(updated, SetOptions.merge()).await()
+                    } catch (e: Exception) {
+                        Log.w(tag, "Could not reset dates remotely: ${e.message}")
+                    }
+                }
+
+                localDb.userBalanceDao().saveBalance(
+                    UserBalanceEntity(
+                        uid = uid,
+                        coins = updated.coins,
+                        gems = updated.gems,
+                        displayName = updated.displayName,
+                        email = updated.email,
+                        photoUrl = updated.photoUrl,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+                return updated
+            }
+        } catch (e: Exception) {
+            Log.w(tag, "Could not sync user remotely: ${e.message}. Using local cache.")
+            val cached = localDb.userBalanceDao().getBalanceOnce(uid)
+            if (cached != null) {
+                return UserProfile(
+                    uid = cached.uid,
+                    displayName = cached.displayName.ifBlank { displayName.ifBlank { "Quest Gamer" } },
+                    email = cached.email.ifBlank { email },
+                    photoUrl = cached.photoUrl.ifBlank { photoUrl },
+                    coins = cached.coins,
+                    gems = cached.gems,
+                    dailyCoins = cached.coins,
+                    weeklyCoins = cached.coins,
+                    lastDailyDate = today,
+                    lastWeeklyDate = thisWeek,
+                    updatedAt = cached.updatedAt
+                )
+            }
+            val fallback = UserProfile(
+                uid = uid,
+                displayName = displayName.ifBlank { "Quest Gamer" },
+                email = email,
+                photoUrl = photoUrl,
+                coins = 50L,
+                gems = 5L,
+                dailyCoins = 50L,
+                weeklyCoins = 50L,
+                lastDailyDate = today,
+                lastWeeklyDate = thisWeek,
+                updatedAt = System.currentTimeMillis()
+            )
             localDb.userBalanceDao().saveBalance(
                 UserBalanceEntity(
                     uid = uid,
-                    coins = updated.coins,
-                    gems = updated.gems,
-                    displayName = updated.displayName,
-                    email = updated.email,
-                    photoUrl = updated.photoUrl,
+                    coins = fallback.coins,
+                    gems = fallback.gems,
+                    displayName = fallback.displayName,
+                    email = fallback.email,
+                    photoUrl = fallback.photoUrl,
                     updatedAt = System.currentTimeMillis()
                 )
             )
-            return updated
+            return fallback
         }
     }
 
@@ -520,7 +785,7 @@ class FirestoreRepository(
                 )
             ).await()
         } catch (e: Exception) {
-            Log.e(tag, "Failed to update FCM token: ${e.message}")
+            Log.w(tag, "Could not update FCM token: ${e.message}")
         }
     }
 
@@ -535,7 +800,7 @@ class FirestoreRepository(
                 )
             ).await()
         } catch (e: Exception) {
-            Log.e(tag, "Failed to clear FCM token: ${e.message}")
+            Log.w(tag, "Could not clear FCM token: ${e.message}")
         }
     }
 
@@ -550,7 +815,7 @@ class FirestoreRepository(
                 )
             ).await()
         } catch (e: Exception) {
-            Log.e(tag, "Failed to update notificationsEnabled: ${e.message}")
+            Log.w(tag, "Could not update notificationsEnabled: ${e.message}")
         }
     }
 
@@ -574,7 +839,7 @@ class FirestoreRepository(
             .limit(50)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(tag, "Error listening to referrals: ${error.message}")
+                    Log.w(tag, "Could not fetch referrals: ${error.message}")
                     trySend(emptyList())
                     return@addSnapshotListener
                 }

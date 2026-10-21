@@ -17,6 +17,7 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.tasks.await
+import com.example.R
 import java.security.MessageDigest
 import java.util.UUID
 
@@ -29,8 +30,9 @@ class AuthService(
     private val auth = FirebaseAuth.getInstance()
     private val credentialManager = CredentialManager.create(context)
 
-    // Web client ID from google-services.json
-    val webClientId = "206042227392-neai3il3b8g7bjvel6hug1hvhjgmprud.apps.googleusercontent.com"
+    // Web client ID resolved dynamically from google-services.json
+    val webClientId: String
+        get() = context.getString(R.string.default_web_client_id)
 
     val currentUser: FirebaseUser?
         get() = auth.currentUser
