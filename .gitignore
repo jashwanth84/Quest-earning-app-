@@ -18,5 +18,3 @@ local.properties
 debug.keystore
 *.jks
 my-upload-key.jks
-*.apk
-*.aab
