@@ -1,4 +1,7 @@
 <resources>
     <string name="app_name">Quest Rewards</string>
+    <!-- Placeholder kept so the project compiles even before the Google Services plugin
+         generates the Firebase resources from app/google-services.json. Replace this with
+         the real web client ID or ensure google-services.json is restored in CI. -->
+    <string name="default_web_client_id">REPLACE_WITH_WEB_CLIENT_ID</string>
 </resources>
-
